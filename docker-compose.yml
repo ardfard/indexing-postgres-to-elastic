@@ -1,0 +1,28 @@
+version: "3"
+services:
+  postgres:
+    image: postgres:13
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_PASSWORD=testing
+    volumes:
+      - ./postgres.conf:/etc/postgres/postgres.conf
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    command:
+      ["-c", "config_file=/etc/postgres/postgres.conf"]
+
+
+  debezium:
+    image: debezium/server:1.7
+    volumes:
+      - ./application.properties:/debezium/conf/application.properties
+      - ./key.json:/key.json
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/key.json
+    ports:
+      - 8080:8080
+
+
+
+

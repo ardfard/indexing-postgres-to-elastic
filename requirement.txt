@@ -1,0 +1,4 @@
+apache-beam[gcp]
+faker
+psycopg2
+faker-commerce
