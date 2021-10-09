@@ -12,6 +12,8 @@ from apache_beam.transforms.core import Map, ParDo
 from apache_beam.transforms.util import WithKeys
 from apache_beam.transforms.window import FixedWindows, TimestampedValue
 import random
+from elasticsearch_writer import ElasticSearchWriteFn
+from elasticsearch import Elasticsearch
 
 
 class AddTimestamp(beam.DoFn):
@@ -50,13 +52,13 @@ def main(argv=None):
         help='Input PubSub topic of the form "/topics/<PROJECT>/<TOPIC>".',
     )
     parser.add_argument(
-        "--output",
+        "--elasticsearch_url",
         required=True,
         help=(
-            "Output file"
+            "Elasticsearch url"
         ),
     )
-    num_shards = 5
+
     known_args, pipeline_args = parser.parse_known_args(argv)
     pipeline_options = PipelineOptions(pipeline_args)
     pipeline_options.view_as(SetupOptions).save_main_session = True
@@ -66,9 +68,12 @@ def main(argv=None):
             | "Read PubSub" >> beam.io.ReadFromPubSub(topic=known_args.input_topic)
             | "Parse JSON" >> beam.Map(json.loads)
             | "Windows into" >> beam.WindowInto(FixedWindows(15, 0))
-            | "Add keys" >> WithKeys(lambda _: random.randint(0, num_shards - 1))
+            | "Add keys" >> WithKeys(lambda e: e['updated']['item_id'])
             | "Group by key" >> beam.GroupByKey()
-            | "Write to text" >> beam.ParDo(WriteToGcs(known_args.output)))
+            | ElasticSearchWriteFn(
+                Elasticsearch(hosts=[known_args.elasticsearch_url]),
+                index_name="tests",
+                batch_size=20))
 
 
 if __name__ == '__main__':

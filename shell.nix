@@ -6,6 +6,7 @@ pkgs.mkShell {
     python38.pkgs.pip
     python38.pkgs.setuptools
     python38.pkgs.psycopg2
+    python38.pkgs.elasticsearch
   ];
   shellHook = ''
     export LD_LIBRARY_PATH=${stdenv.cc.cc.lib}/lib/
