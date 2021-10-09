@@ -1,14 +1,13 @@
-# beampy
 
 Example of real-time indexing Postgres tables to Elasticsearch with Debezium, Google PubSub and Dataflow.
 
-## Dependencies
+# Dependencies
 
 1. docker and docker-compose
 2. nix
 3. gcloud SDK
 
-## Running example
+# Running example
 
 ```
 # Assume working directory inside the repo
