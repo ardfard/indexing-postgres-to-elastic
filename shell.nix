@@ -15,6 +15,6 @@ pkgs.mkShell {
     export PATH="$PIP_PREFIX/bin:$PATH"
     unset SOURCE_DATE_EPOCH
     source .venv/bin/activate
-    pip install -r requirement.txt
+    pip install -r requirements.txt
   '';
 }

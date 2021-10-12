@@ -1,3 +1,5 @@
 _build
 tags*
 .venv
+__pycache__
+dist

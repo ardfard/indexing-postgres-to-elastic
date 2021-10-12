@@ -12,8 +12,7 @@ from apache_beam.transforms.core import Map, ParDo
 from apache_beam.transforms.util import WithKeys
 from apache_beam.transforms.window import FixedWindows, TimestampedValue
 import random
-from elasticsearch_writer import ElasticSearchWriteFn
-from elasticsearch import Elasticsearch
+from elasticsearchio.writer import WriteToElasticSearch
 
 
 class AddTimestamp(beam.DoFn):
@@ -42,14 +41,31 @@ class WriteToGcs(beam.DoFn):
                 f.write(f"{message_body}\n".encode("utf-8"))
 
 
+class ProcessPubsub(beam.PTransform):
+    def __init__(self, topic):
+        self.topic = topic
+
+    def expand(self, pcoll):
+        logging.info(f"Process {self.topic}")
+        return (pcoll
+                | "Read PubSub" >> beam.io.ReadFromPubSub(topic=self.topic)
+                | "Parse JSON" >> beam.Map(json.loads)
+                | "Windows into" >> beam.WindowInto(FixedWindows(15, 0))
+                | "Add keys" >> WithKeys(lambda e: e['after']['item_id'])
+                | "Get latest" >> beam.combiners.Latest.PerKey()
+                )
+
+
 def main(argv=None):
     """Build and run the pipeline."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--input_topic",
+        "--topic_project_id",
         required=True,
-        help='Input PubSub topic of the form "/topics/<PROJECT>/<TOPIC>".',
+        help=(
+            "Project id for prefix"
+        ),
     )
     parser.add_argument(
         "--elasticsearch_url",
@@ -63,17 +79,24 @@ def main(argv=None):
     pipeline_options = PipelineOptions(pipeline_args)
     pipeline_options.view_as(SetupOptions).save_main_session = True
     pipeline_options.view_as(StandardOptions).streaming = True
+    topic_prefix = f"projects/{known_args.topic_project_id}/topics"
+
+    logging.info(f"topic prefix: {topic_prefix}")
+
     with beam.Pipeline(options=pipeline_options) as p:
         (p
-            | "Read PubSub" >> beam.io.ReadFromPubSub(topic=known_args.input_topic)
-            | "Parse JSON" >> beam.Map(json.loads)
-            | "Windows into" >> beam.WindowInto(FixedWindows(15, 0))
-            | "Add keys" >> WithKeys(lambda e: e['updated']['item_id'])
-            | "Group by key" >> beam.GroupByKey()
-            | ElasticSearchWriteFn(
-                Elasticsearch(hosts=[known_args.elasticsearch_url]),
-                index_name="tests",
-                batch_size=20))
+         | "Procces items" >> ProcessPubsub(f"{topic_prefix}/datastaging_test_debezium.public.items")
+         | "Write items" >> WriteToElasticSearch(
+             es_url=known_args.elasticsearch_url,
+             index_name="tests",
+             batch_size=20))
+
+        (p
+         | "Process items price" >> ProcessPubsub(f"{topic_prefix}/datastaging_test_debezium.public.item_prices")
+         | "Write price" >> WriteToElasticSearch(
+             es_url=known_args.elasticsearch_url,
+             index_name="tests",
+             batch_size=20))
 
 
 if __name__ == '__main__':
